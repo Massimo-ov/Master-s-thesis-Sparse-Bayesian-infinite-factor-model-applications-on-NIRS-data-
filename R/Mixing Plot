@@ -62,6 +62,7 @@ p_k <- ggplot(subset(df_k,Iterazione >5000), aes(x = Iterazione, y = K_star)) +
 grid.arrange(p_lp, p_k, nrow=2)
 
 OTHER MIXING USED IN WARM START (THEY ARE ALSO IN "Warm start SBIFM")
+
 df_on <- data.frame(iter=iter, value=ome_norms, state=state)
  p4 <- ggplot(subset(df_on,iter >10000), aes(x=iter, y=value, color=state)) +
    geom_line() +
