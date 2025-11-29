@@ -1,0 +1,482 @@
+# DOING A WARMSTART FOR RE-INIATIALIZE K_ADAPTIVE FUNCTION AND TESTING HIS GOODNESS (IT WORKS GOOD) + PLOT
+## WARM START GIBB SAMPLER
+
+{
+log_posterior <- function(y, Lambda, eta, phi, delta, ps,
+                          as, bs, df, ad1, bd1, ad2, bd2) {
+  # 1) Log-verosimiglianza: Y | Lambda, eta, ps ~ N(eta %*% t(Lambda), diag(1/ps))
+  mu   <- eta %*% t(Lambda)
+  ll   <- sum(dnorm(y, mean = mu, sd = 1/sqrt(ps), log = TRUE))
+  
+  # 2) Prior su ps (Gamma(as, bs))
+  lp_ps <- sum(dgamma(ps, shape = as, rate = bs, log = TRUE))
+  
+  # 3) Prior su Lambda | phi, delta
+  tauh   <- cumprod(delta)
+  Sd_inv <- sweep(phi, 2, tauh, "*")      # precision per colonna
+  lp_L   <- sum(dnorm(Lambda, mean = 0,
+                      sd = 1/sqrt(Sd_inv), log = TRUE))
+  
+  # 4) Prior su eta ~ N(0, I)
+  lp_eta <- sum(dnorm(eta, mean = 0, sd = 1, log = TRUE))
+  
+  # 5) Prior su phi (Gamma(df/2, df/2))
+  lp_phi <- sum(dgamma(phi, shape = df/2, rate = df/2, log = TRUE))
+  
+  # 6) Prior su delta[1] ~ Gamma(ad1, bd1)
+  lp_d1  <- dgamma(delta[1], shape = ad1, rate = bd1, log = TRUE)
+  #    e delta[h>1] ~ Gamma(ad2, bd2)
+  lp_dh  <- sum(dgamma(delta[-1], shape = ad2, rate = bd2, log = TRUE))
+  
+  return(ll + lp_ps + lp_L + lp_eta + lp_phi + lp_d1 + lp_dh)
+}
+log_likelihood <- function(y, Lambda, eta,ps){
+  # 1) Log-verosimiglianza: Y | Lambda, eta, ps ~ N(eta %*% t(Lambda), diag(1/ps))
+  mu   <- eta %*% t(Lambda)
+  ll   <- sum(dnorm(y, mean = mu, sd = 1/sqrt(ps), log = TRUE))
+  return(ll)
+}
+
+#dataset
+y <- as.matrix(df_train)
+p <- ncol(y)
+n <- nrow(y)
+k_star <- round(3*log(p))#######RICAMBIARE la costante per cui si moltiplica log p
+#parametri mcmc
+n_iter <- 20000
+thin <- 1
+burn <- 0
+n_save <- (n_iter-burn)/ thin
+
+#iperparametri
+as    <- 1      
+bs    <- 0.1    
+df    <- 3      
+ad1   <- 2.1      
+bd1   <- 1      
+ad2   <- 3.1      
+bd2   <- 1     
+a_sigma <- 1   
+b_sigma <- 0.3   
+alfa0 <- 1     
+alfa1 <-  0.0005   
+epsilon <- 1e-3 
+prop    <- 1 
+
+ FIRST STATE {
+#prior
+ps     <- rgamma(p, shape = as, rate = bs)  
+Sigma  <- diag(1/ps)
+
+Lambda <- matrix(0, nrow = p, ncol = k_star)
+
+eta    <- matrix(rnorm(n * k_star), nrow = n, ncol = k_star)
+
+phi    <- matrix(rgamma(p * k_star,
+                        shape = df/2,
+                        rate  = df/2),
+                 nrow = p, ncol = k_star)
+
+delta  <- c(rgamma(1, shape = ad1, rate = bd1),
+            rgamma(k_star - 1, shape = ad2, rate = bd2))
+
+tauh    <- cumprod(delta)
+
+Plam   <- sweep(phi, 2, tauh, "*")
+
+
+Lambda_samples1 <- vector("list", n_save)
+sigma_samples1 <- matrix(NA, nrow = n_save, ncol = p)
+k_star_history1 <- numeric(n_iter)
+logpost1 <- numeric(n_iter)
+loglike1 <- numeric(n_iter)
+ome_norms1 <- numeric(n_iter)
+lam_norms1 <- numeric(n_iter)
+sig_norms1 <- numeric(n_iter)
+sigma_z1 <- numeric(n_iter)
+
+#GIBB SAMPLER#
+save_index <- 1
+for (iter in 1:n_iter) {  
+  
+  #step sample eta
+  Lmsg   <- sweep(Lambda, 1, ps, "*")  
+  Veta1  <- diag(k_star) + crossprod(Lmsg, Lambda) 
+  U      <- chol(Veta1)    
+  S      <- backsolve(U, diag(k_star))           
+  Veta   <- S %*% t(S)
+  Meta   <- y %*% Lmsg %*% Veta  
+  eta    <- Meta + matrix(rnorm(n * k_star), nrow = n, ncol = k_star) %*% t(S) 
+  
+  
+  #step sample lambda via rue and held
+  eta2 <- crossprod(eta) 
+  for (j in seq_len(p)) {
+    Qlam   <- diag( Plam[j, ] ) + ps[j] * eta2 
+    blam   <- ps[j] * crossprod(eta, y[, j])  # k×
+    Llam   <- t(chol(Qlam))            
+    zlam   <- rnorm(ncol(eta2))     
+    vlam   <- forwardsolve(Llam,      blam) # Llam v = blam
+    mlam   <- backsolve( t(Llam),     vlam) # Ll
+    ylam   <- backsolve( t(Llam),forwardsolve(Llam, zlam) ) 
+    Lambda[j, ] <- as.numeric( mlam + ylam )
+  }
+  
+  
+  # --- 1) Update phi -------------------------------------------
+  phi     <- matrix(
+    rgamma(p * k_star, shape =  df/2 + 0.5, rate = df/2 + sweep(Lambda^2, 2, tauh, "*")/2 ),
+    nrow = p, ncol = k_star)
+  
+  
+  # ---  Update delta e tauh ----------------------------------
+  mat <- phi * (Lambda^2)   # matrice p × k_star
+  
+  # --- 1) aggiorno delta[1] ---
+  ad1_post <- ad1 + 0.5 * p * k_star
+  bd1_post <- bd1 + 0.5 * (1 / delta[1]) * sum(tauh * colSums(mat))
+  delta[1] <- rgamma(1, shape = ad1_post, rate = bd1_post)
+  tauh      <- cumprod(delta)   # aggiorno τ
+  
+  # --- 2) aggiorno delta[h] per h = 2..k_star ---
+  for (h in 2:k_star) {
+    ad_h <- ad2 + 0.5 * p * (k_star - h + 1)
+    bd_h <- bd2 + 0.5 * (1 / delta[h]) * 
+      sum( tauh[h:k_star] * colSums(mat[, h:k_star, drop = FALSE]) )
+    delta[h] <- rgamma(1, shape = ad_h, rate = bd_h)
+    tauh      <- cumprod(delta)   # riaggiorno τ ogni volta
+  }
+  
+  # --- 3) Update Sigma (residual precision) --------------------
+  Ytil <- y - eta %*% t(Lambda)
+  ps      <- rgamma(p, shape = as + 0.5 * n, rate = bs + 0.5 * colSums(Ytil^2)  )
+  Sigma   <- diag(1 / ps)
+  
+  #update precision parameter
+  Plam <- sweep(phi,2 , tauh ,"*")
+  
+  # Calcola e salva la log-posterior
+  logpost1[iter] <- log_posterior(
+    y, Lambda, eta, phi, delta, ps,
+    as, bs, df, ad1, bd1, ad2, bd2
+  )
+  
+  # Calcola e salva la log likelihood
+  loglike1[iter] <- log_likelihood(
+    y, Lambda,eta,ps)
+  
+  #sakva k star
+  k_star_history1[iter] <- k_star
+  
+  #norma di diag(Ω)
+  Omega  <- Lambda %*% t(Lambda) + Sigma
+  omega_norm <- sqrt(sum(diag(Omega)^2))
+  ome_norms1[iter] <- omega_norm
+  
+  #norma di diag(ΛΛ⊤)
+  prod_lambda  <- Lambda %*% t(Lambda)
+  lambda_norm <- sqrt(sum(diag(prod_lambda)^2))
+  lam_norms1[iter] <- lambda_norm
+  
+  #norma di diag(Σ)
+  sigma_norm <- sqrt(sum(Sigma^2))
+  sig_norms1[iter] <- sigma_norm
+  
+  #salvo sigma della var risposta
+  sigma_z1[iter] <- Sigma[1,1]
+  
+  
+  #parametri per k adattivo
+  rho_t <- 1/ exp(alfa0 + alfa1 * iter)
+  uu <- runif(1)
+  lind <- colSums(abs(Lambda) < epsilon) / p   # proporzione di zero per colonna
+  vec  <- lind >= prop   #TRUE = colonna con zeri
+  num  <- sum(vec) 
+  
+  if (iter > 20 && uu < rho_t) {
+    if (num == 0 &&  all(lind < 0.995)) {
+      k_star   <- k_star + 1
+      Lambda   <- cbind(Lambda, rep(0, p))
+      eta      <- cbind(eta,    rnorm(n))
+      phi      <- cbind(phi,    rgamma(p, shape = df/2, rate = df/2))
+      delta <- c(delta, rgamma(1,ad2,bd2))
+      tauh <-exp(cumsum(log (delta)))
+      Plam <- sweep(phi,2 , tauh ,"*")
+    }
+    else if (num > 0) {
+      nonzero <- which(!vec)           
+      k_star <- max(length(nonzero), 1)
+      Lambda   <- Lambda[, nonzero, drop = FALSE]
+      eta      <- eta[,    nonzero, drop = FALSE]
+      phi      <- phi[,    nonzero, drop = FALSE]
+      delta    <- delta[  nonzero]
+      tauh <-exp(cumsum(log (delta)))
+      Plam <- sweep(phi, 2 , tauh,"*")
+    }
+  } 
+  
+  if (iter %% thin == 0 && iter > burn) {
+    Lambda_samples1[[save_index]] <- Lambda
+    sigma_samples1[save_index, ] <- diag(Sigma)
+    save_index <- save_index + 1
+    
+    
+  }
+  
+  
+  if (iter %% 1000 == 0) {
+    cat("Iterazione:", iter, "k_star =", k_star, "\n")
+  }   
+  
+  
+}
+state <- list(
+  Lambda = Lambda,
+  eta    = eta,
+  phi    = phi,
+  delta  = delta,
+  tauh   = tauh,
+  Plam   = Plam,
+  ps     = ps,
+  Sigma  = Sigma,
+  k_star = k_star
+)
+ }
+ 
+ SECOND STATE {
+   #WARMSTART FROM STATE1
+   Lambda <- state$Lambda
+   eta    <- state$eta
+   phi    <- state$phi
+   delta  <- state$delta
+   tauh   <- state$tauh
+   Plam   <- state$Plam
+   ps     <- state$ps
+   Sigma  <- state$Sigma
+   k_star <- state$k_star
+   
+   
+   Lambda_samples2 <- vector("list", n_save)
+   sigma_samples2 <- matrix(NA, nrow = n_save, ncol = p)
+   k_star_history2 <- numeric(n_iter)
+   logpost2 <- numeric(n_iter)
+   loglike2 <- numeric(n_iter)
+   ome_norms2 <- numeric(n_iter)
+   lam_norms2 <- numeric(n_iter)
+   sig_norms2 <- numeric(n_iter)
+   sigma_z2 <- numeric(n_iter)
+   
+   #GIBB SAMPLER#
+   save_index <- 1
+   for (iter in 1:n_iter) {  
+     
+     #step sample eta
+     Lmsg   <- sweep(Lambda, 1, ps, "*")  
+     Veta1  <- diag(k_star) + crossprod(Lmsg, Lambda) 
+     U      <- chol(Veta1)    
+     S      <- backsolve(U, diag(k_star))           
+     Veta   <- S %*% t(S)
+     Meta   <- y %*% Lmsg %*% Veta  
+     eta    <- Meta + matrix(rnorm(n * k_star), nrow = n, ncol = k_star) %*% t(S) 
+     
+     
+     #step sample lambda via rue and held
+     eta2 <- crossprod(eta) 
+     for (j in seq_len(p)) {
+       Qlam   <- diag( Plam[j, ] ) + ps[j] * eta2 
+       blam   <- ps[j] * crossprod(eta, y[, j])  # k×
+       Llam   <- t(chol(Qlam))            
+       zlam   <- rnorm(ncol(eta2))     
+       vlam   <- forwardsolve(Llam,      blam) # Llam v = blam
+       mlam   <- backsolve( t(Llam),     vlam) # Ll
+       ylam   <- backsolve( t(Llam),forwardsolve(Llam, zlam) ) 
+       Lambda[j, ] <- as.numeric( mlam + ylam )
+     }
+     
+     
+     # --- 1) Update phi -------------------------------------------
+     phi     <- matrix(
+       rgamma(p * k_star, shape =  df/2 + 0.5, rate = df/2 + sweep(Lambda^2, 2, tauh, "*")/2 ),
+       nrow = p, ncol = k_star)
+     
+     
+     # ---  Update delta e tauh ----------------------------------
+     mat <- phi * (Lambda^2)   # matrice p × k_star
+     
+     # --- 1) aggiorno delta[1] ---
+     ad1_post <- ad1 + 0.5 * p * k_star
+     bd1_post <- bd1 + 0.5 * (1 / delta[1]) * sum(tauh * colSums(mat))
+     delta[1] <- rgamma(1, shape = ad1_post, rate = bd1_post)
+     tauh      <- cumprod(delta)   # aggiorno τ
+     
+     # --- 2) aggiorno delta[h] per h = 2..k_star ---
+     for (h in 2:k_star) {
+       ad_h <- ad2 + 0.5 * p * (k_star - h + 1)
+       bd_h <- bd2 + 0.5 * (1 / delta[h]) * 
+         sum( tauh[h:k_star] * colSums(mat[, h:k_star, drop = FALSE]) )
+       delta[h] <- rgamma(1, shape = ad_h, rate = bd_h)
+       tauh      <- cumprod(delta)   # riaggiorno τ ogni volta
+     }
+     
+     # --- 3) Update Sigma (residual precision) --------------------
+     Ytil <- y - eta %*% t(Lambda)
+     ps      <- rgamma(p, shape = as + 0.5 * n, rate = bs + 0.5 * colSums(Ytil^2)  )
+     Sigma   <- diag(1 / ps)
+     
+     #update precision parameter
+     Plam <- sweep(phi,2 , tauh ,"*")
+     
+     # Calcola e salva la log-posterior
+     logpost2[iter] <- log_posterior(
+       y, Lambda, eta, phi, delta, ps,
+       as, bs, df, ad1, bd1, ad2, bd2
+     )
+     
+     # Calcola e salva la log likelihood
+     loglike2[iter] <- log_likelihood(
+       y, Lambda,eta,ps)
+     
+     #salva k star
+     k_star_history2[iter] <- k_star
+     
+     #norma di diag(Ω)
+     Omega  <- Lambda %*% t(Lambda) + Sigma
+     omega_norm <- sqrt(sum(diag(Omega)^2))
+     ome_norms2[iter] <- omega_norm
+     
+     #norma di diag(ΛΛ⊤)
+     prod_lambda  <- Lambda %*% t(Lambda)
+     lambda_norm <- sqrt(sum(diag(prod_lambda)^2))
+     lam_norms2[iter] <- lambda_norm
+     
+     #norma di diag(Σ)
+     sigma_norm <- sqrt(sum(Sigma^2))
+     sig_norms2[iter] <- sigma_norm
+     
+     #salvo sigma della var risposta
+     sigma_z2[iter] <- Sigma[1,1]
+     
+     
+     #parametri per k adattivo
+     rho_t <- 1/ exp(alfa0 + alfa1 * iter)
+     uu <- runif(1)
+     lind <- colSums(abs(Lambda) < epsilon) / p   # proporzione di zero per colonna
+     vec  <- lind >= prop   #TRUE = colonna con zeri
+     num  <- sum(vec) 
+     
+     if (iter > 20 && uu < rho_t) {
+       if (num == 0 &&  all(lind < 0.995)) {
+         k_star   <- k_star + 1
+         Lambda   <- cbind(Lambda, rep(0, p))
+         eta      <- cbind(eta,    rnorm(n))
+         phi      <- cbind(phi,    rgamma(p, shape = df/2, rate = df/2))
+         delta <- c(delta, rgamma(1,ad2,bd2))
+         tauh <-exp(cumsum(log (delta)))
+         Plam <- sweep(phi,2 , tauh ,"*")
+       }
+       else if (num > 0) {
+         nonzero <- which(!vec)           
+         k_star <- max(length(nonzero), 1)
+         Lambda   <- Lambda[, nonzero, drop = FALSE]
+         eta      <- eta[,    nonzero, drop = FALSE]
+         phi      <- phi[,    nonzero, drop = FALSE]
+         delta    <- delta[  nonzero]
+         tauh <-exp(cumsum(log (delta)))
+         Plam <- sweep(phi, 2 , tauh,"*")
+       }
+     } 
+     
+     if (iter %% thin == 0 && iter > burn) {
+       Lambda_samples2[[save_index]] <- Lambda
+       sigma_samples2[save_index, ] <- diag(Sigma)
+       save_index <- save_index + 1
+       
+       
+     }
+     
+     
+     if (iter %% 1000 == 0) {
+       cat("Iterazione:", iter, "k_star =", k_star, "\n")
+     }   
+     
+    }
+   
+   Lambda_samples <- c(Lambda_samples1,Lambda_samples2)
+   sigma_samples <- rbind(sigma_samples1,sigma_samples2)
+   k_star_history <- c(k_star_history1,k_star_history2)
+   logpost <- c(logpost1,logpost2)
+   loglike <- c(loglike1,loglike2)
+   ome_norms <- c(ome_norms1,ome_norms2)
+   lam_norms <- c(lam_norms1,lam_norms2)
+   sig_norms <- c(sig_norms1,sig_norms2)
+   sigma_z <- c(sigma_z1,sigma_z2)
+ }
+
+ 
+ #loglike va bene per tutti gli output in cui salvo gia da subito (prima del burnin)
+ 
+ # Creo anche un indice (iterazioni)
+ iter <- 1:length(loglike)
+ 
+ # Creo un fattore che indica lo stato (1 o 2)
+ stato <- c(rep("stato 1", length(loglike1)), 
+            rep("stato 2", length(loglike2)))
+ 
+ #data frame e plot per ciascuna misura
+ # Metto tutto in un data frame
+ subset(df,Iter >)
+ 
+ df_k <- data.frame(iter=iter, value=k_star_history, state=stato)
+ p1 <- ggplot( subset(df_k,iter >0), aes(x=iter, y=value, color=stato)) +
+   geom_line() +
+   theme_minimal() +
+   labs(x="Iterazione", y=expression(k^"*"))
+ 
+ df_ll <- data.frame(iter=iter, value=loglike, state=stato)
+ p2 <- ggplot(subset(df_ll,iter >0), aes(x=iter, y=value, color=stato)) +
+   geom_line() +
+   theme_minimal() +
+   labs(x="Iterazione", y="logverosimiglianza")
+ 
+ df_lj <- data.frame(iter=iter, value=logpost, state=state)
+ p3 <- ggplot(subset(df_lj,iter >0), aes(x=iter, y=value, color=state)) +
+   geom_line() +
+   theme_minimal() +
+   labs(title="Traceplot con warm start",
+        x="Iterazione", y="logjoint")
+ 
+ grid.arrange(p1,p2,p3,ncol=1)
+ 
+
+ 
+ df_on <- data.frame(iter=iter, value=ome_norms, state=state)
+ p4 <- ggplot(subset(df_on,iter >10000), aes(x=iter, y=value, color=state)) +
+   geom_line() +
+   theme_minimal() +
+   labs(title="Traceplot con warm start",
+        x="Iterazione", y="omega norm")
+ 
+ df_ln <- data.frame(iter=iter, value=lam_norms, state=state)
+ p5 <- ggplot(subset(df_ln,iter >10000), aes(x=iter, y=value, color=state)) +
+   geom_line() +
+   theme_minimal() +
+   labs(title="Traceplot con warm start",
+        x="Iterazione", y="lambda norm")
+ 
+ df_sn <- data.frame(iter=iter, value=sig_norms, state=state)
+ p6 <- ggplot(subset(df_sn,iter >10000), aes(x=iter, y=value, color=state)) +
+   geom_line() +
+   theme_minimal() +
+   labs(title="Traceplot con warm start",
+        x="Iterazione", y="sigma norm") 
+ 
+ df_sz <- data.frame(iter=iter, value=sigma_z, state=state)
+ p7 <- ggplot(subset(df_sz,iter >10000), aes(x=iter, y=value, color=state)) +
+   geom_line() +
+   theme_minimal() +
+   labs(title="Traceplot con warm start",
+        x="Iterazione", y="sigma var risposta")
+ 
+ grid.arrange(p4,p5,p6,p7,ncol=1)
+ 
+} 
