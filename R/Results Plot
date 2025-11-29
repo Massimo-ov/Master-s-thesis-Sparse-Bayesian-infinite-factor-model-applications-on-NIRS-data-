@@ -1,0 +1,156 @@
+#PLOT RESULT , PRED VS FITTED, BETA REAL VS BETA EST , BETA ON NIRS SPECTRA
+
+#PLOT PREDIZIONI
+y_all              <- c(y_train,y_test)         # vettore dei valori reali usati per il training
+y_hat_all <- c(y_pred_tr, y_pred)
+lims <- range(c(y_all, y_hat_all), na.rm = TRUE)
+pad  <- 0.05 * diff(lims)
+xlim <- lims + c(-pad, +pad)
+ylim <- xlim
+
+plot(NA,
+     xlim = xlim, ylim = ylim,
+     xlab = "reali",
+     ylab = "Predetti",
+     main = ".",
+     asp  = 1)
+
+abline(0, 1, lty = 2, col = "gray")
+
+points(y_train,    y_pred_tr, col = "blue", pch = 8, cex = 1.2)
+points(y_test, y_pred,  col = "red",  pch = 1, cex = 1.2)
+legend("topleft",
+       legend = c("train", "validation"),
+       pch    = c(8, 1),
+       col    = c("blue", "red"),
+       bty    = "n")
+
+#plot beta nirs + cred interval
+
+{plot_beta_with_ci <- function(labels, beta_map, Beta_samples, n_ast = 20,
+                               ci_probs = c(0.025, 0.975),
+                               ci_shade_col = rgb(0.8,0.2,0.2,0.25),
+                               main_title = "") {
+  # controlli di base
+  labels <- as.numeric(labels)
+  beta_map <- as.numeric(beta_map)
+  Beta_samples <- as.matrix(Beta_samples)
+  p <- length(beta_map)
+  if (length(labels) != p) stop("labels e beta_map devono avere la stessa lunghezza")
+  if (ncol(Beta_samples) != p) stop("Beta_samples deve avere p colonne (una per ogni beta)")
+  
+  # calcola intervalli di credibilità per ogni coefficiente (2 x p)
+  ci <- apply(Beta_samples, 2, quantile, probs = ci_probs, na.rm = TRUE)
+  # ordina per lunghezza d'onda
+  ord <- order(labels)
+  
+  # limiti plot con padding
+  limsY <- range(c(beta_map, ci), na.rm = TRUE)
+  padY  <- 0.05 * diff(limsY)
+  ylimY <- limsY + c(-padY, +padY)
+  
+  # plot base (linea) -- NOTA: tutte le argomentazioni di plot() devono essere dentro le parentesi
+  plot(labels[ord], beta_map[ord], type = "n",
+       xlab = "Lunghezza d'onda (nm)", ylab = "Beta stimati",
+       xlim = range(labels, na.rm = TRUE), ylim = ylimY,
+       main = main_title, las = 1)
+  
+  # banda di credibilità (ribbon)
+  polygon(x = c(labels[ord], rev(labels[ord])),
+          y = c(ci[1, ord], rev(ci[2, ord])),
+          col = ci_shade_col, border = NA)
+  
+  # linea dei beta
+  lines(labels[ord], beta_map[ord], lwd = 2)
+  abline(h = 0, lty = 2)
+  
+  # evidenzia i n_ast più importanti (solo punti)
+  n_ast <- min(n_ast, p)
+  idx_ast <- order(abs(beta_map), decreasing = TRUE)[1:n_ast]
+  points(labels[idx_ast], beta_map[idx_ast], pch = 19, cex = 1.2, col = "darkred")
+  
+  # legenda
+  legend("topright",
+         legend = c("β stimato", "95% CI", paste0(n_ast, " β con magnitudine maggiore")),
+         lty = c(1, NA, NA),
+         pch = c(NA, 15, 19),
+         pt.cex = c(NA, 1.2, 1.2),
+         col = c("black", ci_shade_col, "darkred"),
+         bty = "n",
+         pt.bg = c(NA, ci_shade_col, NA))
+}
+  
+  # Esempio d'uso (esegui solo DOPO aver definito la funzione):
+  plot_beta_with_ci(labels = labels, beta_map = beta_map, Beta_samples = Beta_samples, n_ast = 20)
+}
+
+#PLOT dei beta true vs estimation
+ci <- apply(Beta_samples, 2, quantile, probs = c(0.025, 0.975), na.rm = TRUE)
+# ci[1, ] = limiti inferiori, ci[2, ] = limiti superiori
+
+# (2) Prepara i limiti di plot, invertendo x e y
+limsT <- range(c(beta_true, beta_map), na.rm = TRUE)
+padT  <- 0.05 * diff(limsT)
+xlimT <- limsT + c(-padT, +padT)  # per beta_true
+ylimT <- xlimT                    # per beta_map
+
+# (3) Apri il plot “ruotato”
+plot(NA,
+     xlim = xlimT, ylim = ylimT,
+     xlab = expression(beta[true]),
+     ylab = expression(beta[est]),
+     asp  = 1)
+
+abline(0, 1, lty = 2, col = "gray")  # retta y=x per riferimento
+
+# (4) Segmenti verticali = bande di credibilità 95%
+#     il segmento va da y = lower a y = upper, a x = beta_true[i]
+for(i in seq_along(beta_true)) {
+  segments(x0 = beta_true[i], y0 = ci[1, i],
+           x1 = beta_true[i], y1 = ci[2, i],
+           col = "darkred", lwd = 1.2)
+}
+
+# (5) Punto MAP centrato sul segmento
+points(beta_true, beta_map, col = "darkred", pch = 1, cex = 1.2)
+
+#DIFFERENZE NELLA MATRICE OMEGA 
+library(reshape2)
+  library(ggplot2)
+  library(patchwork)
+  
+  p <- sqrt(length(Omega1out))
+  omega_est <- matrix(Omega1out, nrow = p, byrow = FALSE)
+  
+  # differenze logaritmiche
+  eps <- 1e-6
+  Delta <- Ot - omega_est
+  Delta_log <- sign(Delta) * log(abs(Delta) + eps)
+  
+  # palette e limiti comuni
+  pal <- colorRampPalette(c("blue", "white", "red"))(100)
+  lim_common <- max(abs(c(Ot, omega_est, Delta)))  # stesso limite per tutti
+  
+  plot_matrix <- function(M, title, lim_common) {
+    df <- melt(M)
+    ggplot(df, aes(x = Var2, y = Var1, fill = value)) +
+      geom_tile(color = "white") +
+      scale_y_reverse() +
+      coord_equal() +
+      theme_minimal(base_size = 12) +
+      labs(title = title, x = NULL, y = NULL) +
+      scale_fill_gradient2(
+        low = "blue", mid = "white", high = "red",
+        limits = c(-lim_common, lim_common),
+        name = ""
+      )
+  }
+  
+  p1 <- plot_matrix(omega_est, "Matrice di varianza covarianza stimata", lim_common)
+  p2 <- plot_matrix(Ot, "Matrice di varianza covarianza vera", lim_common)
+  p3 <- plot_matrix(Delta, expression("Matrice degli errori di stima (" * hat(Omega) - Omega * ")"), lim_common)
+  
+  # facoltativo: unisci i plot
+  (p2 | p1 | p3)
+  
+
