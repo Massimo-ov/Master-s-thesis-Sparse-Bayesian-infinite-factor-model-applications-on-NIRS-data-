@@ -1,0 +1,109 @@
+#OTHER STUDIES ON MODEL
+# contributi di ogni fattore latente per beta 
+ {
+  calcola_contributi <- function(Lambda_list, K_star) {
+   
+   contributi_iter <- lapply(Lambda_list, function(Lambda) {
+     
+     # 1. Calcolo norma^2 di ciascuna colonna (fattore)
+     col_norms <- colSums(Lambda^2)
+     
+     # 2. Ordino i fattori in base alla norma decrescente
+     ord <- order(col_norms, decreasing = TRUE)
+     col_norms_ord <- col_norms[ord]
+     
+     # 3. Troncamento ai primi K_star fattori
+     if (length(col_norms_ord) >= K_star) {
+       contrib_trunc <- col_norms_ord[1:K_star]
+     } else {
+       contrib_trunc <- c(col_norms_ord, rep(0, K_star - length(col_norms_ord)))
+     }
+     
+     # 4. Normalizzo in percentuale (somma a 1)
+     contrib_perc <- contrib_trunc / sum(contrib_trunc)
+     
+     return(list(abs = contrib_trunc,
+                 perc = contrib_perc))
+   })
+   
+   # Estraggo matrici assoluti e percentuali
+   contrib_abs_mat <- do.call(rbind, lapply(contributi_iter, `[[`, "abs"))
+   contrib_perc_mat <- do.call(rbind, lapply(contributi_iter, `[[`, "perc"))
+   
+   # Medie
+   contrib_abs_media <- colMeans(contrib_abs_mat)
+   contrib_perc_media <- colMeans(contrib_perc_mat)
+   
+   return(list(
+     contributi_assoluti = contrib_abs_mat,
+     contributi_percentuali = contrib_perc_mat,
+     media_assoluti = contrib_abs_media,
+     media_percentuali = contrib_perc_media
+   ))
+  }
+   
+ ris <- calcola_contributi(Lambda_samples, K_star=19)
+ 
+ # Media contributi assoluti
+ ris$media_assoluti
+ 
+ # Media contributi percentuali
+ ris$media_percentuali
+ df_media <- data.frame(
+   Fattore     = paste0("F", 1:length(ris$media_percentuali)),
+   Percentuale = round(ris$media_percentuali * 100, 1)
+ )
+ 
+ # Crea la tavola
+ tab <- ggtexttable(df_media, rows = NULL,
+                    theme = ttheme("minimal"))
+ 
+ # Visualizza la tavola
+ print(tab)
+ 
+ df1 <- df_media[1:8, ]
+ df2 <- df_media[9:17, ]
+ 
+ # Crei due tabelle separate
+ tab1 <- ggtexttable(df1, rows = NULL, theme = ttheme("minimal"))
+ tab2 <- ggtexttable(df2, rows = NULL, theme = ttheme("minimal"))
+ 
+ # Le affianchi in un'unica "pagina"
+ grid.arrange(tab1, tab2, nrow = 2)
+ }
+ 
+# mean and var di ogni entry di sigma
+ { varianze <-  apply(sigma_samples, 2, var) 
+ medie <- colMeans(sigma_samples)
+ 
+ df_medie <- data.frame(
+   Indice = 1:length(medie),
+   Valore = medie
+ )
+ 
+ # Dataframe varianze
+ df_var <- data.frame(
+   Indice = 1:length(varianze),
+   Valore = varianze
+ )
+ 
+ # Plot medie
+ p_medie <- ggplot(df_medie, aes(x=Indice, y=Valore)) +
+   geom_point(color="blue", alpha=0.6) +
+   labs(title="Medie di Sigma varianza non spiegata", x="Elemento", y="Media delle entry di Sigma") +
+   theme_minimal()
+ 
+ # Plot varianze
+ p_var <- ggplot(df_var, aes(x=Indice, y=Valore)) +
+   geom_point(color="red", alpha=0.6) +
+   scale_y_continuous(trans='log10') +  # scala logaritmica per evidenziare differenze
+   labs(title="Varianze di Sigma varianza non spiegata ", x="Elemento", y="Varianza  delle entry di Sigma") +
+   theme_minimal()
+ 
+grid.arrange(p_medie,p_var, ncol=1)
+ #pacchetto infinite factor
+ { out = linearMGSP(X = df_train, nrun = 1000, burn = 500, adapt = FALSE)
+ aligned = jointRot(out$lambdaSamps, out$etaSamps)
+ plotmat(lmean(aligned$lambda))
+ }
+ }
