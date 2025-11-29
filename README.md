@@ -1,6 +1,8 @@
 # Sparse Bayesian Infinite Factor Model: Applications on NIRS Data
 
 ## Description
+**Acknowledgements: the bigger thanks goes to my supervisor Alessandro Lanteri and my co-supervisor Guillaume Kon Kam King for all the
+support and the opportunities given to me during this thesis**
 
 This project provides a clean and fully reproducible **educational implementation** of the  
 **Sparse Bayesian Infinite Factor Model (SBIFM)**.
