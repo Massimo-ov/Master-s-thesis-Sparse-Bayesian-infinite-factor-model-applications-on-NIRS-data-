@@ -61,7 +61,36 @@ p_k <- ggplot(subset(df_k,Iterazione >5000), aes(x = Iterazione, y = K_star)) +
   theme(plot.title = element_text(hjust = 0.5, face = "bold"))
 grid.arrange(p_lp, p_k, nrow=2)
 
-
+OTHER MIXING USED IN WARM START (THEY ARE ALSO IN "Warm start SBIFM")
+df_on <- data.frame(iter=iter, value=ome_norms, state=state)
+ p4 <- ggplot(subset(df_on,iter >10000), aes(x=iter, y=value, color=state)) +
+   geom_line() +
+   theme_minimal() +
+   labs(title="Traceplot con warm start",
+        x="Iterazione", y="omega norm")
+ 
+ df_ln <- data.frame(iter=iter, value=lam_norms, state=state)
+ p5 <- ggplot(subset(df_ln,iter >10000), aes(x=iter, y=value, color=state)) +
+   geom_line() +
+   theme_minimal() +
+   labs(title="Traceplot con warm start",
+        x="Iterazione", y="lambda norm")
+ 
+ df_sn <- data.frame(iter=iter, value=sig_norms, state=state)
+ p6 <- ggplot(subset(df_sn,iter >10000), aes(x=iter, y=value, color=state)) +
+   geom_line() +
+   theme_minimal() +
+   labs(title="Traceplot con warm start",
+        x="Iterazione", y="sigma norm") 
+ 
+ df_sz <- data.frame(iter=iter, value=sigma_z, state=state)
+ p7 <- ggplot(subset(df_sz,iter >10000), aes(x=iter, y=value, color=state)) +
+   geom_line() +
+   theme_minimal() +
+   labs(title="Traceplot con warm start",
+        x="Iterazione", y="sigma var risposta")
+ 
+ grid.arrange(p4,p5,p6,p7,ncol=1)
 
 
 
