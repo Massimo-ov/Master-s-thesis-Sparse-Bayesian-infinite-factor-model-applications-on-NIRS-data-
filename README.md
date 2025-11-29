@@ -40,19 +40,17 @@ This folder contains all the R scripts used in the thesis, including:
   covariance estimation, prediction assessment, and performance metrics.
 
 - **Warm start SBIFM**  
-  Version of the model using warm-start initialisation, useful for faster convergence  
-  or when applying the model to real datasets.
+  Version of the model using warm-start initialisation, useful for checking the k adaptive.
 
 - **NIRS biscuit preprocess**  
   Preprocessing pipeline for the *publicly available* biscuit dough NIRS dataset,  
   including centering, scaling, feature inspection, and spectral cleaning.
 
 - **Mixing Plot**  
-  Functions and scripts for traceplots, autocorrelation analysis,  
-  effective sample size estimation, and general MCMC diagnostic plots.
+  Functions and scripts for traceplots, general MCMC diagnostic plots.
 
 - **Results Plot**  
-  Scripts to generate visualisations of posterior loadings, covariance estimates,  
+  Scripts to generate visualisations of, covariance estimates,  
   fitted vs predicted values, beta coefficients, and factors extracted from NIRS data.
 
 - **More analysis**  
