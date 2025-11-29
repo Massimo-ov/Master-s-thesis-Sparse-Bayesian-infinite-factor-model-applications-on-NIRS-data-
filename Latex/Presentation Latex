@@ -1,0 +1,495 @@
+MASTER THESIS PRESENTATION LATEX
+----------------------------------------------------------------------------------------------------------------------------------
+\documentclass{beamer}
+\usetheme{}
+\usecolortheme{}
+\usefonttheme{}
+\usepackage{graphicx}
+\usepackage{lmodern}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{booktabs} 
+
+% --------------------------------------------------
+% INFORMAZIONI PRINCIPALI
+% --------------------------------------------------
+\title{Modello Bayesiano sparso a infiniti fattori latenti: applicazioni a dati di spettroscopia del vicino infrarosso}
+\author{Massimo Armano}
+\date{Novembre 2025}
+
+% Rimuove barra di navigazione e altri simboli
+\setbeamertemplate{navigation symbols}{}
+
+% --------------------------------------------------
+% LOGO SOLO NELLE SLIDE DI CONTENUTO
+% --------------------------------------------------
+\addtobeamertemplate{frametitle}{}{%
+  \begin{textblock*}{1cm}(11.5cm,0.25cm) % posizione (x,y)
+    \includegraphics[width=1.2cm]{LogoUniToConvertito.png} % logo piccolo in alto a destra
+  \end{textblock*}
+}
+\usepackage[absolute,overlay]{textpos} % necessario per posizionamento del logo
+
+% --------------------------------------------------
+\begin{document}
+
+% --------------------------------------------------
+% SLIDE DI COPERTINA (senza logo)
+% --------------------------------------------------
+\begin{frame}
+  \centering
+  \vspace{1cm}
+  \includegraphics[width=3.5cm]{LogoUniToConvertito.png}\\[1cm]
+  {\Large \textbf{\inserttitle}}\\[0.4cm]
+  {\large \insertauthor}\\[0.2cm]
+\end{frame}
+
+% --------------------------------------------------
+% SLIDE DI CONTENUTO (logo in alto a destra)
+% --------------------------------------------------
+\begin{frame}{Curse of dimensionality:il paradigma Large–p,Small–n}
+
+\small
+% --- Blocco fisso: sempre visibile ---
+In molti contesti statistici moderni, il numero di variabili (\(p\)) supera di gran lunga il numero di osservazioni (\(n\)).  
+Questa struttura rende difficile l’inferenza classica e richiede approcci specifici.
+
+\vspace{0.4cm}
+
+% --- Spazio riservato all'elenco + immagine ---
+\only<1>{\vspace{3.8cm}} % riserva lo spazio per evitare spostamenti
+
+\only<2>{
+\begin{minipage}{0.55\textwidth}
+  Alcuni esempi:
+  \begin{itemize}
+    \item Dati genomici
+    \item Immagini e segnali ad alta risoluzione
+    \item Dati ambientali o sensoriali complessi
+    \item Dati di spettroscopia
+  \end{itemize}
+\end{minipage}
+\hfill
+\begin{minipage}{0.4\textwidth}
+  \centering
+  \includegraphics[width=\linewidth]{Genomics_hero_1500_1500_adj_hero.png}
+\end{minipage}
+}
+
+\end{frame}
+
+\begin{frame}{Fondamenti di statistica Bayesiana}
+
+\small
+Nell’approccio bayesiano i parametri sono trattati come \textbf{variabili aleatorie} soggette a incertezza.
+
+\vspace{0.3cm}
+\textbf{Principi essenziali:}
+\begin{itemize}
+  \item Si assegna una \textbf{prior} \(\pi(\theta)\), che rappresenta l’informazione a priori sul parametro.
+  
+  \item I dati sono modellati tramite la \textbf{verosimiglianza} \(p(x \mid \theta)\).
+  
+  \item L’inferenza si basa sulla \textbf{posterior}:
+  \[
+  \pi(\theta \mid x) = \frac{p(x \mid \theta) \pi(\theta)}{p(x)}
+  \]
+\end{itemize}
+
+\vspace{0.3cm}
+La stima dei parametri deriva dalla posterior.  
+Quando la sua forma esplicita è inaccessibile, si utilizzano metodi \textbf{Monte Carlo Markov Chain (MCMC)} per approssimarla tramite campionamento.
+
+\end{frame}
+
+\begin{frame}{Modello fattoriale: struttura e riduzione dimensionale}
+
+\small
+I modelli fattoriali offrono una soluzione efficace ai contesti \(p \gg n\), riducendo \(p\) variabili osservate in \(k\) fattori latenti, con \(k \ll p\).
+
+\vspace{0.4cm}
+Si può definire ogni osservazione $x_i$ p-dimensionale come:
+\[
+x_i = \mu + \Lambda f_i + \varepsilon_i, \quad \varepsilon_i \sim \mathcal{N}_p(0, \Psi)
+\]
+dove:
+\begin{itemize}
+  \item \(\Lambda \in \mathbb{R}^{p \times k}\): matrice dei carichi fattoriali $\lambda_{jh}$
+  \item \(f_i \in \mathbb{R}^{k}\): fattori latenti, \(f_i \sim \mathcal{N}(0, I_k)\)
+  \item \(\Psi \in \mathbb{R}^{p \times p}\): matrice diagonale delle varianze specifiche
+\end{itemize}
+
+\vspace{0.2cm}
+Di conseguenza la matrice di Varianza Covarianza:
+\[
+\Sigma = \Lambda \Lambda^\top + \Psi
+\]
+
+\vspace{0.2cm}
+La struttura consente una riduzione dimensionale:  
+invece di stimare una matrice \(\Sigma \in \mathbb{R}^{p \times p}\), si stimano \(\Lambda\) e \(\Psi\), con \(\Lambda\) di dimensione ridotta se \(k \ll p\).
+
+\end{frame}
+
+
+
+
+
+
+
+
+%Il modello estende l’analisi fattoriale a un contesto bayesiano con numero potenzialmente infinito di fattori. A VOCE
+\begin{frame}{Lo Sparse Bayesian Infinite Factor Model}
+
+\small
+Il modello introduce prior di \textbf{shrinkage}, che riducono progressivamente l’influenza dei fattori meno rilevanti, permettendo di concentrare la varianza spiegata su meno fattori.  
+
+
+\vspace{0.2cm}
+\textbf{Prior di Shrinkage sui carichi fattoriali:}
+\[
+\lambda_{jh} \sim \mathcal{N}(0, (\phi_{jh} \tau_h)^{-1})
+\]
+\vspace{-0.5cm}
+\begin{itemize}
+  \item \(\phi_{jh} \sim \text{Gamma}(\frac{\nu}{2},\frac{\nu}{2})\): \textit{shrinkage locale} (regola l’importanza di ogni singolo carico)
+  \item \(\tau_h = \prod_{\ell=1}^{h} \delta_\ell\): \textit{shrinkage globale} con il \textbf{Multiplicative Gamma Process (MGP)}
+  \[
+  \delta_1 \sim \Gamma(a_1,1), \quad \delta_\ell \sim \Gamma(a_2,1), \ \ell \ge 2
+  \]
+\end{itemize}
+
+\vspace{0.2cm}
+Il MGP impone una penalizzazione crescente su \(\lambda_{jh}\) al crescere di \(h\), grazie a questa struttura, il numero effettivo di fattori \(k\) non va scelto a priori ma viene \textbf{determinato automaticamente e in modo adattivo} dal modello stesso.
+
+\end{frame}
+
+
+
+
+\begin{frame}{Stima della matrice \(\Sigma\) e dei coefficienti \(\beta\)}
+
+\small
+Dal campionamento MCMC, otteniamo stime per:
+\[
+\Lambda \in \mathbb{R}^{p \times k}, \quad \Psi \in \mathbb{R}^{p \times p} \text{ (diagonale)}
+\]
+
+\vspace{0.2cm}
+Queste consentono di ricostruire la matrice di covarianza:
+\[
+\Sigma = \Lambda \Lambda^\top + \Psi
+\]
+
+\vspace{0.3cm}
+Assumendo normalità congiunta tra la variabile di risposta \(z_i\) e i predittori \(y_i \in \mathbb{R}^{p-1}\):
+\[
+x_i =
+\begin{bmatrix}
+z_i \\
+y_i
+\end{bmatrix}
+\sim \mathcal{N}_p \left(0,
+\begin{bmatrix}
+\Sigma_{zz} & \Sigma_{zy} \\
+\Sigma_{yz} & \Sigma_{yy}
+\end{bmatrix}
+\right)
+\]
+
+\vspace{0.3cm}
+Dalla normalità condizionata si ottiene:
+\[
+z_i \mid y_i \sim \mathcal{N}(y_i^\top \beta, \Sigma_{z \mid y}),
+\quad \text{con} \quad
+\beta = \Sigma_{yy}^{-1} \Sigma_{yz}
+\]
+
+\vspace{0.1cm}
+{\scriptsize (dove: \(\Sigma_{yy} \in \mathbb{R}^{(p-1) \times (p-1)}\), \(\Sigma_{yz} \in \mathbb{R}^{(p-1) \times 1}\), \(\beta \in \mathbb{R}^{(p-1) \times 1}\))}
+\end{frame}
+
+
+
+
+\begin{frame}{Valutazione del modello su dati simulati}
+
+\small
+\only<1->{
+Dati simulati da un modello fattoriale con \(p = 30\) variabili e \(k = 5\) \\ fattori latenti.
+\[
+\Lambda \in \mathbb{R}^{30 \times 5}, \quad \Psi = 0.01 \cdot I_{30}
+\]
+\[
+\Sigma = \Lambda \Lambda^\top + \Psi
+\]
+
+\vspace{0.2cm}
+\(\Lambda\) costruita sparsa, con valori diversi da zero solo su righe selezionate casualmente.  
+Vettori \(x_i \sim \mathcal{N}_{30}(0, \Sigma)\), con \(n = 200\) osservazioni simulate.
+}
+
+\vspace{0.4cm}
+
+\begin{minipage}{0.48\textwidth}
+  \visible<2->{
+    \includegraphics[width=\linewidth]{matrixp30_true.png} \\
+    \scriptsize \centering Struttura vera
+  }
+\end{minipage}
+\hfill
+\begin{minipage}{0.48\textwidth}
+  \visible<3->{
+    \includegraphics[width=\linewidth]{matrix_vs_p30_est.png} \\
+    \scriptsize \centering Struttura stimata
+  }
+\end{minipage}
+
+\end{frame}
+
+\begin{frame}{Valutazione del modello su dati simulati}
+
+\small
+\only<1->{
+Dati generati come nel caso precedente, con \(p = 100\) variabili e \(k = 5\) fattori latenti.
+}
+
+\vspace{0.4cm}
+
+\begin{minipage}{0.48\textwidth}
+  \visible<2->{
+    \includegraphics[width=\linewidth]{beta_vs_p100_sim.png} \\
+    \scriptsize \centering Coefficienti \(\beta = \Sigma_{yy}^{-1} \Sigma_{yz}\)
+  }
+\end{minipage}
+\hfill
+\begin{minipage}{0.48\textwidth}
+  \visible<3->{
+    \includegraphics[width=\linewidth]{pred_p100_sim.png} \\
+    \scriptsize \centering Predizioni vs. Osservati
+  }
+\end{minipage}
+
+\end{frame}
+
+
+
+\begin{frame}{Introduzione ai dati NIRS}
+
+\small
+La spettroscopia del vicino infrarosso (NIRS) è una tecnica analitica \\ non distruttiva, rapida e a basso costo, sempre più utilizzata in ambito scientifico e industriale.
+
+\vspace{0.1cm}
+Essa consente di acquisire spettri altamente informativi, legati alla struttura e alla composizione del campione.
+
+\vspace{0.05cm}
+\begin{center}
+\textbf{Sono state effettuate due applicazioni:}
+\end{center}
+
+\begin{center}
+\begin{minipage}{0.48\textwidth}
+    \centering
+    \textbf{NIRS sull'impasto dei biscotti}\\
+    \includegraphics[width=\linewidth]{centered_biscuit_spectra.png}
+\end{minipage}
+\hfill
+\begin{minipage}{0.48\textwidth}
+    \centering
+    \textbf{NIRS sul grano}\\
+    \includegraphics[width=\linewidth]{grain_centered_spectra.png}
+\end{minipage}
+\end{center}
+
+\end{frame}
+
+
+
+
+
+
+
+
+\begin{frame}{Applicazione I — Impasto di biscotti (NIRS)}
+
+\small
+Dati NIRS raccolti su impasto di biscotti (Osborne et al., 1984).  
+Ogni campione è descritto da \(256\) punti spettrali (intervallo 1380–2498 nm).
+
+\vspace{0.2cm}
+Il dataset include \(n = 72\) osservazioni totali:
+\begin{itemize}
+  \item \textbf{Training set:} 39 campioni
+  \item \textbf{Test set:} 32 campioni
+\end{itemize}
+
+\vspace{0.1cm}
+Variabili risposta: \textbf{grassi}, \textbf{saccarosio}, \textbf{farina}, \textbf{acqua} (in percentuale).
+
+\vspace{0.3cm}
+
+% Contenitore a spazio fisso per i plot (stesso spazio occupato sempre)
+\begin{minipage}{\textwidth}
+\centering
+\only<1>{\vspace{4.5cm}} % spazio vuoto nella prima transizione
+\only<2>{
+  \includegraphics[height=4.5cm]{flat_beta_vs.jpeg} \\
+  \scriptsize \textit{Coefficienti \(\beta\) stimati su spettri NIRS}
+}
+\only<3>{
+  \includegraphics[height=4.5cm]{pred_VS_on_FAT_ita.png} \\
+  \scriptsize \textit{Predizioni vs. osservati — contenuto di grassi}
+}
+\end{minipage}
+
+\end{frame}
+
+
+
+
+
+
+
+\begin{frame}{Confronto delle performance predittive}
+{\small \textit{MSPE: Risultati dei modelli tratti da Brown et al. (2001) vs. risultati dei\\ modelli implementati}}
+
+\scriptsize
+\begin{table}[ht]
+\centering
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{llcccc}
+\toprule
+ & \textbf{Metodo} & \textbf{Grassi} & \textbf{Saccarosio} & \textbf{Farina} & \textbf{Acqua} \\
+\midrule
+\multicolumn{6}{l}{\textbf{Risultati benchmark da Brown et al. (2001)}} \\
+ & Regressione MLR stepwise      & 0.044 & 1.188 & 0.722 & 0.221 \\
+ & Bayesian Decision Theory      & 0.076 & 0.566 & 0.265 & 0.176 \\
+ & PLS                           & 0.151 & 0.583 & 0.375 & 0.105 \\
+ & PCR                           & 0.160 & 0.614 & 0.388 & 0.106 \\
+\addlinespace[0.3em]
+\multicolumn{6}{l}{\textbf{Bayesian wavelet regression sviluppata da Brown et al. (2001)}} \\
+ & Media su 500 modelli          & 0.063 & 0.449 & 0.348 & 0.050 \\
+ & Miglior modello               & 0.059 & 0.466 & 0.351 & \textbf{0.047} \\
+\addlinespace[0.3em]
+\multicolumn{6}{l}{\textbf{Modelli implementati nel presente lavoro}} \\
+ & Ridge regression              & 0.020 & 0.059 & \textbf{0.068} & 0.052 \\
+ & {\color{blue}\textbf{S.B.I.F.M.}} & {\color{blue}\textbf{0.016}} & {\color{blue}\textbf{0.024}} & \color{blue}0.073 & \color{blue}0.058 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\vspace{0.1cm}
+{\scriptsize \textit{MSPE: Mean Squared Prediction Error per ciascuna variabile risposta.}}
+
+\end{frame}
+
+
+
+\begin{frame}{Applicazione II — NIRS sul grano}
+
+\small
+\begin{minipage}{\textwidth}
+Dati NIRS di assorbanza acquisiti su campioni di grano coltivati in \\ condizioni controllate di stress idrico (Rincent et al., 2018). \\  
+\(n = 223\) varietà (\(115\) train, \(108\) test), \(p = 1050\) punti spettrali (400–2500 nm). Variabile risposta: resa di grano.
+\end{minipage}
+
+\vspace{0.3cm}
+
+\begin{minipage}{0.48\textwidth}
+  \centering
+  \visible<2->{
+    \includegraphics[height=4.5cm]{sbifm_pred.png} \\
+    \scriptsize \textit{Predizioni vs. osservati SBIFM}
+  }
+\end{minipage}
+\hfill
+\begin{minipage}{0.48\textwidth}
+  \centering
+  \visible<3->{
+    \includegraphics[height=4.5cm]{ridge_pred.png} \\
+    \scriptsize \textit{Predizioni vs. osservati Ridge}
+  }
+\end{minipage}
+
+\end{frame}
+
+
+\begin{frame}{Applicazione II — NIRS sul grano}
+
+\scriptsize
+% --- PLOT: sempre visibili e stabili ---
+\begin{minipage}{0.48\textwidth}
+  \centering
+  \includegraphics[height=4.5cm]{BART_pred.png} \\
+  \scriptsize \textit{Predizioni vs. osservati BART}
+\end{minipage}
+\hfill
+\begin{minipage}{0.48\textwidth}
+  \centering
+  \includegraphics[height=4.5cm]{KNN_pred.png} \\
+  \scriptsize \textit{Predizioni vs. osservati KNN}
+\end{minipage}
+
+\vspace{0.4cm}
+
+% --- TABELLA: visibile solo dalla slide 2, ma spazio sempre riservato ---
+\begin{minipage}{\textwidth}
+  \only<1>{\vspace{2.2cm}} % altezza approssimativa della tabella per bloccare layout
+  \only<2>{
+    \begin{table}[ht]
+    \centering
+    \renewcommand{\arraystretch}{1.3}
+    \begin{tabular}{lcccc}
+    \toprule
+     & {\color{blue}\textbf{S.B.I.F.M.}} & \textbf{BART} & \textbf{KNN Regr.} & \textbf{Ridge} \\
+    \midrule
+    MSPE &
+    {\color{blue} 0.81} &
+    0.76 &
+    0.89 &
+    \textbf{0.63} \\
+    \bottomrule
+    \end{tabular}
+    \end{table}
+  }
+\end{minipage}
+
+\end{frame}
+
+
+\begin{frame}{Conclusioni}
+
+\small
+\begin{itemize}
+    \item L’applicazione del modello ai dati sull’\textbf{impasto dei biscotti}, ampiamente studiati in letteratura, ha mostrato \textbf{ottime performance}, superando quasi tutti i benchmark considerati.
+    
+    \vspace{0.2cm}
+    \item L’applicazione ai dati sul \textbf{grano} ha invece fornito risultati \textbf{insoddisfacenti}. Anche altri metodi si sono dimostrati deboli su questo dataset, poco analizzato in letteratura.
+    
+    \vspace{0.2cm}
+    \item Ciò suggerisce che le difficoltà non dipendano solo dal modello: i soli dati NIRS potrebbero non essere sufficienti e potrebbe essere utile integrarli con \textbf{informazioni genetiche} delle varietà di grano.
+\end{itemize}
+
+\end{frame}
+
+
+
+
+
+\setbeamertemplate{frametitle}{} 
+
+% --------------------------------------------------
+% SLIDE FINALE - RINGRAZIAMENTI
+% --------------------------------------------------
+\begin{frame}
+  \centering
+  \vfill
+  { \includegraphics[width=3cm]{LogoUniToConvertito.png}
+  
+  \vspace{0.4cm}
+  \Huge \textbf{Grazie per l’attenzione!}}\\[1cm]
+  \vfill
+\end{frame}
+
+\end{document}
+
