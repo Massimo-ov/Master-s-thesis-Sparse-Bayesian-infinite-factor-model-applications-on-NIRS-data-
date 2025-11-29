@@ -1,0 +1,72 @@
+#mixing plot, LogL, LogP, K
+
+burnin <-5000
+par(mfrow=c(3,1))
+plot((burnin+1):n_iter, logpost[(burnin+1):n_iter],
+     type = "l",
+     xlab = "Iterazione", ylab = "Log-joint",
+     main = "Traceplot della log-joint")
+
+plot((burnin+1):n_iter, loglike[(burnin+1):n_iter],
+     type = "l",
+     xlab = "Iterazione", ylab = "Log-likelihood",
+     main = "Traceplot della log-likelihood")
+
+plot((burnin+1):n_iter,k_star_history[(burnin+1):n_iter], type = "l",
+     xlab = "Iterazione", ylab = "k_star")
+
+vals  <- logpost[(burnin+1):n_iter]
+
+# 1) Istogramma + densità
+hist(vals, breaks = 40, freq = FALSE,
+     xlab = "Log-posterior",
+     main = "Log-p den")
+
+# same on ggplot , visually prettier----------------------------------------------------------------------
+#TRACEPLOT PER TESI
+df_k <- data.frame(
+  Iterazione = 1:length(k_star_history),
+  K_star = k_star_history
+)
+
+df_ll <- data.frame(
+  Iterazione = 1:length(loglike),
+  LogLik = loglike
+)
+
+df_lp <- data.frame(
+  Iterazione = 1:length(logpost),
+  LogPost = logpost
+)
+
+# traceplot log-verosimiglianza
+p_ll <- ggplot(subset(df_ll,Iterazione >5000), aes(x = Iterazione, y = LogLik)) +
+  geom_line(color = "steelblue", linewidth = 0.3) +
+  theme_minimal(base_size = 13) +
+  labs(x = "Iterazioni", y = "Log-verosimiglianza") +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+
+# traceplot log-posterior
+p_lp <- ggplot(subset(df_lp,Iterazione >5000), aes(x = Iterazione, y = LogPost)) +
+  geom_line(color = "darkred", linewidth = 0.3) +
+  theme_minimal(base_size = 13) +
+  labs(  x = "Iterazioni", y = "Log-posterior") +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold")) 
+
+# andamento di k 
+p_k <- ggplot(subset(df_k,Iterazione >5000), aes(x = Iterazione, y = K_star)) +
+  geom_line(color = "darkgreen", linewidth = 0.3) +
+  theme_minimal(base_size = 13) +
+  labs(x = "Iterazioni", y = expression(k^"*")) +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+grid.arrange(p_lp, p_k, nrow=2)
+
+
+
+
+
+
+
+
+
+lines(density(vals), lwd = 2)
